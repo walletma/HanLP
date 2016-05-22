@@ -204,8 +204,8 @@ public abstract class Segment
             {
                 int start = i;
                 int to = i + 1;
-                int end = - 1;
-                CoreDictionary.Attribute value = null;
+                int end = to;
+                CoreDictionary.Attribute value = dat.output(state);
                 for (; to < wordNet.length; ++to)
                 {
                     state = dat.transition(wordNet[to].realWord, state);
@@ -241,8 +241,8 @@ public abstract class Segment
                 {
                     int start = i;
                     int to = i + 1;
-                    int end = - 1;
-                    CoreDictionary.Attribute value = null;
+                    int end = to;
+                    CoreDictionary.Attribute value = state.getValue();
                     for (; to < wordNet.length; ++to)
                     {
                         if (wordNet[to] == null) continue;
@@ -299,23 +299,31 @@ public abstract class Segment
                 {
                     sbQuantifier.append(cur.realWord);
                     iterator.remove();
+                    removeFromWordNet(cur, wordNetAll, line, sbQuantifier.length());
                 }
-                if (cur != null &&
-                        (cur.hasNature(Nature.q) || cur.hasNature(Nature.qv) || cur.hasNature(Nature.qt))
-                        )
+                if (cur != null)
                 {
-                    if (config.indexMode)
+                    if ((cur.hasNature(Nature.q) || cur.hasNature(Nature.qv) || cur.hasNature(Nature.qt)))
                     {
-                        wordNetAll.add(line, new Vertex(sbQuantifier.toString(), new CoreDictionary.Attribute(Nature.m)));
+                        if (config.indexMode)
+                        {
+                            wordNetAll.add(line, new Vertex(sbQuantifier.toString(), new CoreDictionary.Attribute(Nature.m)));
+                        }
+                        sbQuantifier.append(cur.realWord);
+                        iterator.remove();
+                        removeFromWordNet(cur, wordNetAll, line, sbQuantifier.length());
                     }
-                    sbQuantifier.append(cur.realWord);
-                    pre.attribute = new CoreDictionary.Attribute(Nature.mq);
-                    pre.wordID = -1;    // -1代表NGram模型中的“万能词”，保证二次维特比得分一定更高
-                    iterator.remove();
+                    else
+                    {
+                        line += cur.realWord.length();   // (cur = iterator.next()).hasNature(Nature.m) 最后一个next可能不含q词性
+                    }
                 }
                 if (sbQuantifier.length() != pre.realWord.length())
                 {
                     pre.realWord = sbQuantifier.toString();
+                    pre.word = Predefine.TAG_NUMBER;
+                    pre.attribute = new CoreDictionary.Attribute(Nature.mq);
+                    pre.wordID = CoreDictionary.M_WORD_ID;
                     sbQuantifier.setLength(0);
                 }
             }
@@ -323,6 +331,30 @@ public abstract class Segment
             line += pre.realWord.length();
         }
 //        System.out.println(wordNetAll);
+    }
+
+    /**
+     * 将一个词语从词网中彻底抹除
+     * @param cur 词语
+     * @param wordNetAll 词网
+     * @param line 当前扫描的行数
+     * @param length 当前缓冲区的长度
+     */
+    private static void removeFromWordNet(Vertex cur, WordNet wordNetAll, int line, int length)
+    {
+        LinkedList<Vertex>[] vertexes = wordNetAll.getVertexes();
+        // 将其从wordNet中删除
+        for (Vertex vertex : vertexes[line + length])
+        {
+            if (vertex.from == cur)
+                vertex.from = null;
+        }
+        ListIterator<Vertex> iterator = vertexes[line + length - cur.realWord.length()].listIterator();
+        while (iterator.hasNext())
+        {
+            Vertex vertex = iterator.next();
+            if (vertex == cur) iterator.remove();
+        }
     }
 
     /**
